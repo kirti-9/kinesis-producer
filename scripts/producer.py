@@ -14,9 +14,9 @@ class KinesisStreamManager:
         self.logger = logging.getLogger('KinesisStreamManager')
         self.logger.setLevel(logging.INFO)
         formatter = logging.Formatter(LOG_FORMAT)
-        ch = logging.StreamHandler(sys.stdout)
-        ch.setFormatter(formatter)
-        self.logger.addHandler(ch)
+        log_handler = logging.StreamHandler(sys.stdout)
+        log_handler.setFormatter(formatter)
+        self.logger.addHandler(log_handler)
 
     # create_data_stream_if_not_exists checks if the desired stream is present, if not it creates one.
     def create_data_stream_if_not_exists(self, stream_name, shard_count):
@@ -32,31 +32,32 @@ class KinesisStreamManager:
         try:
             self.kinesis_client.create_stream(StreamName=stream_name, ShardCount=shard_count)
             self.logger.info(f"Data stream doesn't exist, '{stream_name}' created with {shard_count} shards.")
+            self.logger.info("Wait for Data stream to get provisioned")
+            while True:
+                response = self.kinesis_client.describe_stream(StreamName=stream_name)
+                if response['StreamDescription']['StreamStatus'] == 'ACTIVE':
+                    self.logger.info("Data stream status is active")
+                    return
+                time.sleep(1)
         except Exception as e:
             self.logger.error(f"Failed to create data stream: {e}")
 
 
 class KinesisProducer:
-    def __init__(self, region, stream_name, partition_key):
+    def __init__(self, region, stream_name):
         self.stream_name = stream_name
-        self.partition_key = partition_key
         self.kinesis_client = boto3.client('kinesis', region_name=region)
         self.logger = logging.getLogger('KinesisProducer')
-        self.logger.setLevel(logging.INFO)
-        formatter = logging.Formatter(LOG_FORMAT)
-        log_handler = logging.StreamHandler(sys.stdout)
-        log_handler.setFormatter(formatter)
-        self.logger.addHandler(log_handler)
 
     # push_data writes the data to an AWS Kinesis Data Stream
-    def push_data(self, data):
+    def push_data(self, data, partition_key):
         try:
             self.kinesis_client.put_record(
                 StreamName=self.stream_name,
                 Data=json.dumps(data),
-                PartitionKey=self.partition_key
+                PartitionKey=partition_key
             )
-            self.logger.info("Data pushed")
+            self.logger.info("Data pushed in shard: {}".format(partition_key))
         except Exception as e:
             self.logger.error(f"Failed to push data: {e}")
 
@@ -66,7 +67,6 @@ def main():
 
     stream_name = 'AForB_callevents'
     shard_count = 4
-    partition_key = 'default'
     region = 'eu-north-1'
 
     # Initialize stream manager
@@ -75,13 +75,14 @@ def main():
     stream_manager.create_data_stream_if_not_exists(stream_name, shard_count)
 
     # Initialize producer
-    producer = KinesisProducer(region, stream_name, partition_key)
+    producer = KinesisProducer(region, stream_name)
 
     # Continuously push data to Kinesis stream
     count = 0
     while count < 4:
         data = EventDataGenerator.generate_event_data()
-        producer.push_data(data)
+        partition_key = str(hash(data))
+        producer.push_data(data, partition_key)
         time.sleep(1)  # Push 1 record per second
         count += 1
 
