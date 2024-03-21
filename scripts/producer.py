@@ -3,7 +3,11 @@ import json
 import logging
 import time
 from event_record_generator import EventDataGenerator
-from scripts.data_stream_config import region, stream_name, shard_count
+import sys
+import os
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from config.data_stream_config import DataStreamConfig
 
 LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 
@@ -60,13 +64,15 @@ class KinesisProducer:
 def main():
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
+    config = DataStreamConfig()
+
     # Initialize stream manager
-    stream_manager = KinesisStreamManager(region)
+    stream_manager = KinesisStreamManager(config.region)
     # Check if data stream exists, if not, create it
-    stream_manager.create_data_stream_if_not_exists(stream_name, shard_count)
+    stream_manager.create_data_stream_if_not_exists(config.stream_name, config.shard_count)
 
     # Initialize producer
-    producer = KinesisProducer(region, stream_name)
+    producer = KinesisProducer(config.region, config.stream_name)
 
     # Continuously push data to Kinesis stream
     while True:
