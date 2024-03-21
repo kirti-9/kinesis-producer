@@ -9,8 +9,8 @@ LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 
 
 class KinesisStreamManager:
-    def __init__(self):
-        self.kinesis_client = boto3.client('kinesis')
+    def __init__(self, region):
+        self.kinesis_client = boto3.client('kinesis', region_name=region)
         self.logger = logging.getLogger('KinesisStreamManager')
         self.logger.setLevel(logging.INFO)
         formatter = logging.Formatter(LOG_FORMAT)
@@ -37,10 +37,10 @@ class KinesisStreamManager:
 
 
 class KinesisProducer:
-    def __init__(self, stream_name, partition_key):
+    def __init__(self, region, stream_name, partition_key):
         self.stream_name = stream_name
         self.partition_key = partition_key
-        self.kinesis_client = boto3.client('kinesis')
+        self.kinesis_client = boto3.client('kinesis', region_name=region)
         self.logger = logging.getLogger('KinesisProducer')
         self.logger.setLevel(logging.INFO)
         formatter = logging.Formatter(LOG_FORMAT)
@@ -62,19 +62,20 @@ class KinesisProducer:
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
     stream_name = 'AForB_callevents'
     shard_count = 4
     partition_key = 'default'
+    region = 'eu-north-1'
 
     # Initialize stream manager
-    stream_manager = KinesisStreamManager()
+    stream_manager = KinesisStreamManager(region)
     # Check if data stream exists, if not, create it
     stream_manager.create_data_stream_if_not_exists(stream_name, shard_count)
 
     # Initialize producer
-    producer = KinesisProducer(stream_name, partition_key)
+    producer = KinesisProducer(region, stream_name, partition_key)
 
     # Continuously push data to Kinesis stream
     count = 0
