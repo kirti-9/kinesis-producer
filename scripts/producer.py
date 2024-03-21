@@ -1,9 +1,9 @@
 import boto3
 import json
 import logging
-import sys
 import time
 from event_record_generator import EventDataGenerator
+from config import data_stream_config as conf
 
 LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 
@@ -12,11 +12,6 @@ class KinesisStreamManager:
     def __init__(self, region):
         self.kinesis_client = boto3.client('kinesis', region_name=region)
         self.logger = logging.getLogger('KinesisStreamManager')
-        self.logger.setLevel(logging.INFO)
-        formatter = logging.Formatter(LOG_FORMAT)
-        log_handler = logging.StreamHandler(sys.stdout)
-        log_handler.setFormatter(formatter)
-        self.logger.addHandler(log_handler)
 
     # create_data_stream_if_not_exists checks if the desired stream is present, if not it creates one.
     def create_data_stream_if_not_exists(self, stream_name, shard_count):
@@ -65,26 +60,21 @@ class KinesisProducer:
 def main():
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
-    stream_name = 'AForB_callevents'
-    shard_count = 4
-    region = 'eu-north-1'
-
     # Initialize stream manager
-    stream_manager = KinesisStreamManager(region)
+    stream_manager = KinesisStreamManager(conf.region)
     # Check if data stream exists, if not, create it
-    stream_manager.create_data_stream_if_not_exists(stream_name, shard_count)
+    stream_manager.create_data_stream_if_not_exists(conf.stream_name, conf.shard_count)
 
     # Initialize producer
-    producer = KinesisProducer(region, stream_name)
+    producer = KinesisProducer(conf.region, conf.stream_name)
 
     # Continuously push data to Kinesis stream
-    count = 0
-    while count < 4:
+    while True:
         data = EventDataGenerator.generate_event_data()
-        partition_key = str(hash(json.dumps(data)))  # Serialize data to JSON and then hash
+        # Serialize data to JSON and then hash for equal data distribution
+        partition_key = str(hash(json.dumps(data)))
         producer.push_data(data, partition_key)
-        time.sleep(1)  # Push 1 record per second
-        count += 1
+        time.sleep(1)  # to push 1 record per second
 
 
 if __name__ == "__main__":
