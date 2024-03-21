@@ -81,7 +81,7 @@ def main():
     count = 0
     while count < 4:
         data = EventDataGenerator.generate_event_data()
-        partition_key = str(hash(data))
+        partition_key = str(hash(json.dumps(data)))  # Serialize data to JSON and then hash
         producer.push_data(data, partition_key)
         time.sleep(1)  # Push 1 record per second
         count += 1
